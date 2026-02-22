@@ -28,6 +28,85 @@ let baseMapPlane = null; // 底图平面实例
 
 // 【修复新增】：记录初始相机状态，用于“重置视角”
 let initialCameraState = { pos: new THREE.Vector3(), target: new THREE.Vector3() };
+
+// ====== 新增：音频上下文与音效控制 ======
+let soundEnabled = true; // 初始化默认开启
+const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+// ====== 【新增：全局首次交互解锁音频】 ======
+function unlockAudioContext() {
+    if (audioCtx && audioCtx.state === 'suspended') {
+        audioCtx.resume().then(() => {
+            console.log("🔊 浏览器音频已解锁");
+        });
+    }
+    // 解锁成功后，立刻销毁这两个监听器，避免浪费性能
+    document.removeEventListener('click', unlockAudioContext);
+    document.removeEventListener('touchstart', unlockAudioContext);
+}
+
+// 监听用户的第一次任意点击或触摸
+document.addEventListener('click', unlockAudioContext);
+document.addEventListener('touchstart', unlockAudioContext);
+// ==========================================
+
+// 解决浏览器自动播放策略：用户第一次点击页面时激活音频
+document.body.addEventListener('pointerdown', () => {
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+}, { once: true });
+
+// 1. 播放建筑属性刷新时的“滴滴”声 (高频短促)
+function playHoverSound() {
+    if (!soundEnabled) return;
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+
+    const osc = audioCtx.createOscillator();
+    const gainNode = audioCtx.createGain();
+
+    osc.type = 'sine'; // 正弦波，声音清脆
+    osc.frequency.setValueAtTime(800, audioCtx.currentTime); // 起始频率
+    osc.frequency.exponentialRampToValueAtTime(1200, audioCtx.currentTime + 0.1); // 快速升高
+
+    gainNode.gain.setValueAtTime(0.1, audioCtx.currentTime); // 音量
+    gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.1); // 快速衰减
+
+    osc.connect(gainNode);
+    gainNode.connect(audioCtx.destination);
+
+    osc.start();
+    osc.stop(audioCtx.currentTime + 0.1); // 0.1秒后停止
+}
+
+// 2. 播放流光波纹的“嗡嗡”能量声 (低频缓和)
+function playRippleSound() {
+    if (!soundEnabled || !uniforms.uRippleEnabled.value) return;
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+
+    const osc = audioCtx.createOscillator();
+    const gainNode = audioCtx.createGain();
+
+    osc.type = 'triangle'; // 三角波，带有能量感
+    osc.frequency.setValueAtTime(100, audioCtx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(40, audioCtx.currentTime + 1.5);
+
+    gainNode.gain.setValueAtTime(0.0, audioCtx.currentTime);
+    gainNode.gain.linearRampToValueAtTime(0.15, audioCtx.currentTime + 0.5); // 渐入
+    gainNode.gain.linearRampToValueAtTime(0.0, audioCtx.currentTime + 1.5);  // 渐出
+
+    osc.connect(gainNode);
+    gainNode.connect(audioCtx.destination);
+
+    osc.start();
+    osc.stop(audioCtx.currentTime + 1.5);
+}
+
+// 根据着色器中的 speed 和 cycle 计算，波纹每 4 秒 (12000 / 3000) 产生一次
+// 我们用一个定时器来循环触发波纹音效
+setInterval(() => {
+    if (document.visibilityState === 'visible') { // 只有网页在前端显示时才发声
+        playRippleSound();
+    }
+}, 4000);
 // =====================================================
 
 // ====== 新增：防拖拽误触变量 ======
@@ -150,6 +229,15 @@ function injectResponsiveCSS() {
                 font-size: 12px !important;
                 margin: 2px 0 !important;
                 line-height: 1.2 !important;
+            }
+            
+            body {
+                /* 使用自带的 crosshair 十字准星，或者你可以替换为自己的 base64 图片URL */
+                cursor: crosshair !important; 
+            }
+            button, select, a, input[type="checkbox"] {
+                /* 交互元素悬浮时变成指针 */
+                cursor: pointer !important; 
             }
         }
     `;
@@ -535,7 +623,7 @@ let currentLang = 'zh';
 // 国际化双语字典
 const i18nDict = {
     zh: {
-        loading: "正在构建三维城市网络...", subtitle: "Interactive 3D City Digital Twin",
+        loading: "正在构建三维城市网络...", subtitle: "Interactive 3D Urban Digital Twin",
         mapNone: "地图底板: 无", mapWhite: "地图底板: 白色", mapBlack: "地图底板: 黑色", mapSatellite: "地图底板: 在线遥感",
         btnCamera: "📷", btnDownload: "📥", btnSettings: "⚙️", btnAbout: "ℹ️",
         infoHeight: "高度 (Height):", infoCoords: "经纬度 (Lon, Lat):",
@@ -543,9 +631,10 @@ const i18nDict = {
         hintScroll: "滚轮", hintScrollDesc: "缩放城市", hintHover: "悬停", hintHoverDesc: "查看属性",
         settingsTitle: "⚙️ 场景控制台", setLang: "🌐 界面语言 (Language)", setFullscreen: "🖥️ 全屏模式",
         setRipple: "🌊 动态波纹特效", setFog: "🌫️ 远景科技雾", setGrid: "🕸️ 底部网格投影", setAutoRotate: "🚁 自动漫游模式",
+        setSound: "🔊 场景音效 (Sound Effects)",
         aboutTitle: "ℹ️ 关于及版权信息",
-        aboutText1: "本系统依托于《XXXXXX》论文研究成果开发 (注：请将此处替换为您的PDF论文真实标题)。",
-        aboutText2: "版权所有 © 2024-2026 研究团队。保留所有权利。",
+        aboutText1: "本系统依托于《Multi-temporal satellite parallax enables large-scale 3D urban reconstruction across global environments》论文研究成果开发 (注：请将此处替换为您的PDF论文真实标题)。",
+        aboutText2: "版权所有 © 2024-2026 ReTV-3DSC研究团队，Error Chtholly。保留所有权利。",
         aboutText3: "如需引用本系统及相关算法，请参考上述文献，未经授权不得用于商业用途。",
         // ===== 新增图表翻译 =====
         chartTitle: "📊 城市建筑数据多维统计",
@@ -556,7 +645,7 @@ const i18nDict = {
         chartNoData: "暂无建筑数据加载"
     },
     en: {
-        loading: "Building 3D Urban Network...", subtitle: "Interactive 3D City Digital Twin",
+        loading: "Building 3D Urban Network...", subtitle: "Interactive 3D Urban Digital Twin",
         mapNone: "Basemap: None", mapWhite: "Basemap: White", mapBlack: "Basemap: Black", mapSatellite: "Basemap: Online Sat",
         btnCamera: "📷", btnDownload: "📥", btnSettings: "⚙️", btnAbout: "ℹ️",
         infoHeight: "Height:", infoCoords: "Coordinates:",
@@ -564,9 +653,10 @@ const i18nDict = {
         hintScroll: "Scroll", hintScrollDesc: "Zoom", hintHover: "Hover", hintHoverDesc: "Inspect",
         settingsTitle: "⚙️ Console", setLang: "🌐 Language", setFullscreen: "🖥️ Fullscreen",
         setRipple: "🌊 Dynamic Ripple", setFog: "🌫️ Tech Fog", setGrid: "🕸️ Base Grid", setAutoRotate: "🚁 Auto-Rotate",
+        setSound: "🔊 Sound Effects",
         aboutTitle: "ℹ️ About & Copyright",
-        aboutText1: "This system is developed based on the paper <XXXXXX> (Please replace with actual PDF title).",
-        aboutText2: "Copyright © 2024-2026 Research Team. All rights reserved.",
+        aboutText1: "This system is developed based on the paper <Multi-temporal satellite parallax enables large-scale 3D urban reconstruction across global environments> (Please replace with actual PDF title).",
+        aboutText2: "Copyright © 2024-2026 ReTV-3DSC Research Team, Error Chtholly. All rights reserved.",
         aboutText3: "For citations, please refer to the literature. No unauthorized commercial use.",
         // ===== 新增图表翻译 =====
         chartTitle: "📊 City Building Multi-dimensional Stats",
@@ -636,6 +726,14 @@ function resetCameraSmoothly(targetPos, targetLookAt, duration = 1200) {
 }
 
 function bindUIEvents() {
+    // 监听音效开关
+    const toggleSoundBtn = document.getElementById('toggle-sound');
+    if (toggleSoundBtn) {
+        toggleSoundBtn.addEventListener('change', (e) => {
+            soundEnabled = e.target.checked;
+        });
+    }
+
     // ====== 新增：阻止画布区域的右键默认菜单和原生鼠标手势 ======
     const canvasContainer = document.getElementById('canvas-container');
     if (canvasContainer) {
@@ -1028,10 +1126,16 @@ function onMouseMove(event) {
             
             hoveredMesh = object;
             hoveredMesh.material.color.setHex(0x00f3ff); 
-            
+
+            // ====== 【新增：触发建筑刷新音效】 ======
+            if (typeof playHoverSound === 'function') {
+                playHoverSound();
+            }
+            // =====================================
+
             bldIdText.innerText = `ID: ${hoveredMesh.userData.id}`;
             bldHeightText.innerText = hoveredMesh.userData.height.toFixed(2) + ' m';
-            
+
             const pt = intersects[0].point;
             if (globalLocalOrigin) {
                 const localMeshX = pt.x - globalCityOffset.x;
@@ -1085,6 +1189,14 @@ function onPointerUp(event) {
             hoveredMesh.material.color.setHex(hoveredMesh.userData.baseColor || 0x28385e);
         }
 
+        // ====== 【新增：判断是否点中了新建筑，触发音效】 ======
+        if (hoveredMesh !== object) {
+            if (typeof playHoverSound === 'function') {
+                playHoverSound();
+            }
+        }
+        // =================================================
+
         // ==========================================
         // 【修改点】：与 onMouseMove 样式保持完全一致
         // ==========================================
@@ -1127,6 +1239,7 @@ function onPointerUp(event) {
 }
 
 // 【修改】：执行点击后的射线检测与 UI 更新（完全对齐电脑端悬停样式）
+// 【修改】：执行点击后的射线检测与 UI 更新（完全对齐电脑端悬停样式）
 function triggerRaycastClick() {
     raycaster.setFromCamera(mouse, camera);
 
@@ -1146,6 +1259,12 @@ function triggerRaycastClick() {
             hoveredMesh = object;
             // 【修改点1】：颜色统一改为亮蓝色，和悬停保持一致
             hoveredMesh.material.color.setHex(0x00f3ff);
+
+            // ====== 【新增：触发建筑刷新音效】 ======
+            if (typeof playHoverSound === 'function') {
+                playHoverSound();
+            }
+            // =====================================
         }
 
         // --- 2. 更新属性面板文字 ---
