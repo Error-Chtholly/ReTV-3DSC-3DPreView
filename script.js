@@ -3,7 +3,7 @@
 let DATA_URL = './lod1_dataset/kunming.json'; 
 
 // 新增：分块数据读取配置
-let CHUNK_DIR = './lod1_dataset/kunming_chunks/'; // 分块文件夹路径
+let CHUNK_DIR = './lod1_dataset/kunming/'; // 分块文件夹路径
 let CHUNK_PREFIX = 'kunming_part_';               // 分块文件前缀
 
 const HEIGHT_FIELD = 'pred_heigh'; 
@@ -29,6 +29,11 @@ let baseMapPlane = null; // 底图平面实例
 // 【修复新增】：记录初始相机状态，用于“重置视角”
 let initialCameraState = { pos: new THREE.Vector3(), target: new THREE.Vector3() };
 // =====================================================
+
+// ====== 新增：防拖拽误触变量 ======
+let pointerDownX = 0;
+let pointerDownY = 0;
+// ==================================
 
 // 特效参数传递
 const uniforms = {
@@ -63,9 +68,16 @@ function startClockUI() {
 }
 
 // 【修复新增】：动态注入响应式 CSS，解决窗口缩小后 UI 和文字重叠问题，并居中所有按钮文字
+// 【修复新增】：动态注入响应式 CSS，解决窗口缩小后 UI 和文字重叠问题，并居中所有按钮文字
 function injectResponsiveCSS() {
     const style = document.createElement('style');
     style.innerHTML = `
+        /* ====== 【新增修复】：强制时钟字体与整体 UI 统一 ====== */
+        #realtime-clock {
+            font-family: "PingFang SC", "Microsoft YaHei", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
+        }
+        /* ======================================================== */
+
         /* 【样式修复】：强制所有按钮中的文字和图标上下左右完全居中 */
         button {
             display: inline-flex !important;
@@ -81,7 +93,7 @@ function injectResponsiveCSS() {
             font-size: 20px !important;
         }
 
-            @media screen and (max-width: 768px) {
+        @media screen and (max-width: 768px) {
             /* 左上角标题区域 */
             .ui-container, .top-left-ui {
                 position: absolute !important;
@@ -181,6 +193,10 @@ function init() {
 
     window.addEventListener('resize', onWindowResize);
     window.addEventListener('mousemove', onMouseMove);
+
+    // 【全新修改】：使用 Pointer Events 统一处理电脑点击和手机触摸
+    renderer.domElement.addEventListener('pointerdown', onPointerDown, false);
+    renderer.domElement.addEventListener('pointerup', onPointerUp, false);
 
     loadCityData();
     animate();
@@ -468,16 +484,24 @@ async function buildCity(data) {
     gridHelper.visible = document.getElementById('toggle-grid').checked;
     scene.add(gridHelper);
 
-    // ====== 新增：构建地图底板平面 ======
+    // ====== 【修复】：动态自适应构建与刷新地图底板平面 ======
     if (!baseMapPlane) {
-        const planeGeo = new THREE.PlaneGeometry(maxSize * 3, maxSize * 3);
+        // 初始大小先给 1，稍后统一缩放
+        const planeGeo = new THREE.PlaneGeometry(1, 1);
         const planeMat = new THREE.MeshStandardMaterial({ color: 0xffffff, side: THREE.DoubleSide, visible: false, roughness: 1.0 });
         baseMapPlane = new THREE.Mesh(planeGeo, planeMat);
         baseMapPlane.rotation.x = -Math.PI / 2;
-        baseMapPlane.position.y = -1.0; 
+        baseMapPlane.position.y = -1.0;
         scene.add(baseMapPlane);
     }
-    // ===================================
+
+    // 关键修复 1：每次渲染新城市，强制更新底图的大小以包围整个城市
+    baseMapPlane.scale.set(maxSize * 4, maxSize * 4, 1);
+
+    // 关键修复 2：刚加载完城市，立即读取 HTML 下拉框的当前值，强制同步一次！
+    const currentBasemap = document.getElementById('basemap-select') ? document.getElementById('basemap-select').value : 'none';
+    applyBasemap(currentBasemap);
+    // ========================================================
 
     console.log(`✅ 成功渲染 ${total} 栋建筑`);
 }
@@ -611,40 +635,6 @@ function bindUIEvents() {
             btn.title = btn.title || id.replace('btn-', ''); 
         }
     }
-    
-    // 【修复】：真正的在线遥感底图纹理加载机制
-    document.getElementById('basemap-select').addEventListener('change', (e) => {
-        if (!baseMapPlane) return;
-        const val = e.target.value;
-        if (val === 'none') {
-            baseMapPlane.visible = false;
-        } else if (val === 'white') {
-            baseMapPlane.visible = true;
-            baseMapPlane.material.map = null; // 清除图片
-            baseMapPlane.material.color.setHex(0xffffff); 
-            baseMapPlane.material.needsUpdate = true;
-        } else if (val === 'black') {
-            baseMapPlane.visible = true;
-            baseMapPlane.material.map = null;
-            baseMapPlane.material.color.setHex(0x000000); 
-            baseMapPlane.material.needsUpdate = true;
-        } else if (val === 'satellite') {
-            baseMapPlane.visible = true;
-            baseMapPlane.material.color.setHex(0xffffff); // 将底色重置为白色防止发黑
-            
-            // 使用 TextureLoader 动态加载真实在线地图瓦片作底图
-            const loader = new THREE.TextureLoader();
-            // 【修复底图】：彻底解决画布污染和跨域加载问题
-            loader.setCrossOrigin('anonymous'); 
-            loader.load('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/4/5/12', (texture) => {
-                texture.wrapS = THREE.RepeatWrapping;
-                texture.wrapT = THREE.RepeatWrapping;
-                texture.repeat.set(15, 15); // 重复贴图平铺
-                baseMapPlane.material.map = texture;
-                baseMapPlane.material.needsUpdate = true;
-            });
-        }
-    });
 
     // 城市切换与下载
     document.getElementById('city-select').addEventListener('change', (e) => {
@@ -652,7 +642,7 @@ function bindUIEvents() {
         
         // 【关键修改】：同步更新完整下载路径 和 分块读取路径
         DATA_URL = `./lod1_dataset/${cityName}.json`; 
-        CHUNK_DIR = `./lod1_dataset/${cityName}_chunks/`;
+        CHUNK_DIR = `./lod1_dataset/${cityName}/`;
         CHUNK_PREFIX = `${cityName}_part_`;
 
         // ================= 新增这行代码 =================
@@ -903,6 +893,50 @@ function bindUIEvents() {
     });
 }
 
+// 【新增】：提取出独立的底图应用逻辑，方便随时调用同步状态
+function applyBasemap(val) {
+    if (!baseMapPlane) return;
+
+    if (val === 'none') {
+        baseMapPlane.visible = false;
+    } else if (val === 'white') {
+        baseMapPlane.visible = true;
+        baseMapPlane.material.map = null;
+        baseMapPlane.material.color.setHex(0xffffff);
+        baseMapPlane.material.needsUpdate = true;
+    } else if (val === 'black') {
+        baseMapPlane.visible = true;
+        baseMapPlane.material.map = null;
+        baseMapPlane.material.color.setHex(0x000000);
+        baseMapPlane.material.needsUpdate = true;
+    } else if (val === 'satellite') {
+        baseMapPlane.visible = true;
+        baseMapPlane.material.color.setHex(0xffffff); // 防止底色发黑
+
+        const loader = new THREE.TextureLoader();
+        loader.setCrossOrigin('anonymous');
+        loader.load('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/4/5/12', (texture) => {
+            texture.wrapS = THREE.RepeatWrapping;
+            texture.wrapT = THREE.RepeatWrapping;
+            // 增加贴图平铺密度，让遥感地图更细腻
+            texture.repeat.set(20, 20);
+            baseMapPlane.material.map = texture;
+            baseMapPlane.material.needsUpdate = true;
+        }, undefined, (err) => {
+            console.error("遥感底图加载失败，可能是跨域或网络问题:", err);
+        });
+    }
+}
+
+// 在 bindUIEvents 中重新绑定事件：
+// 请确保你的 HTML 中包含： <select id="basemap-select">...</select>
+const basemapSelect = document.getElementById('basemap-select');
+if (basemapSelect) {
+    basemapSelect.addEventListener('change', (e) => {
+        applyBasemap(e.target.value);
+    });
+}
+
 function onMouseMove(event) {
     // 【修复2】：判断鼠标是否在 UI 弹窗等非画布元素上，如果是则直接拦截，清除高亮并退出
     if (event.target.tagName !== 'CANVAS') {
@@ -954,6 +988,84 @@ function onMouseMove(event) {
             hoveredMesh = null;
             infoPanel.classList.add('hidden');
         }
+    }
+}
+
+// 【新增】：记录按下时的屏幕坐标
+function onPointerDown(event) {
+    pointerDownX = event.clientX;
+    pointerDownY = event.clientY;
+}
+
+// 【新增】：抬起时计算移动距离，判断是点击还是拖拽
+function onPointerUp(event) {
+    // 计算手指/鼠标在 X 和 Y 方向的移动距离
+    const deltaX = Math.abs(event.clientX - pointerDownX);
+    const deltaY = Math.abs(event.clientY - pointerDownY);
+
+    // 如果移动距离超过 5 像素，说明用户在拖拽旋转/平移地图，直接 return，不触发建筑点击
+    if (deltaX > 5 || deltaY > 5) {
+        return;
+    }
+
+    // 确定是纯粹的“点击”操作，计算标准设备坐标并触发射线
+    mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+    mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+
+    triggerRaycastClick();
+}
+
+// 【新增】：执行点击后的射线检测与 UI 更新
+function triggerRaycastClick() {
+    raycaster.setFromCamera(mouse, camera);
+
+    // 只检测建筑组 (cityGroup) 内的模型
+    const intersects = raycaster.intersectObjects(cityGroup.children, false);
+
+    if (intersects.length > 0) {
+        const object = intersects[0].object;
+        const point = intersects[0].point; // 交点真实三维坐标
+
+        // --- 1. 高亮选中的建筑 ---
+        if (hoveredMesh !== object) {
+            if (hoveredMesh) {
+                // 恢复上一个建筑的默认颜色
+                hoveredMesh.material.color.setHex(hoveredMesh.userData.baseColor || 0x28385e);
+            }
+            hoveredMesh = object;
+            // 将当前选中建筑变为醒目的高亮色（如：橙黄 0xffaa00 或 亮蓝 0x00f3ff）
+            hoveredMesh.material.color.setHex(0xffaa00);
+        }
+
+        // --- 2. 更新属性面板文字 ---
+        if (bldIdText) bldIdText.innerText = object.userData.id || "未知";
+        if (bldHeightText) bldHeightText.innerText = (object.userData.height || 0).toFixed(1) + ' m';
+
+        // --- 3. 反算真实经纬度 ---
+        if (globalLocalOrigin && bldCoordsText) {
+            // 将三维交点坐标还原为相对原点的平面坐标
+            const localX = point.x - globalCityOffset.x;
+            const localZ = point.z - globalCityOffset.z;
+
+            // Web 墨卡托投影反算 (注意 Three.js 中 Z 轴向前是负的)
+            const mx = localX + globalLocalOrigin[0];
+            const my = -localZ + globalLocalOrigin[1];
+
+            const [lon, lat] = inverseWebMercator(mx, my);
+            bldCoordsText.innerText = `${lon.toFixed(6)}, ${lat.toFixed(6)}`;
+        }
+
+        // --- 4. 强制显示面板 ---
+        if (infoPanel) infoPanel.style.display = 'block';
+
+    } else {
+        // 如果点击到了空白处（底图/天空）
+        if (hoveredMesh) {
+            hoveredMesh.material.color.setHex(hoveredMesh.userData.baseColor || 0x28385e);
+            hoveredMesh = null;
+        }
+        // 隐藏面板
+        if (infoPanel) infoPanel.style.display = 'none';
     }
 }
 
