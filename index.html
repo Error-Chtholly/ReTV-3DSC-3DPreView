@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>3D Urban Viewer</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+</head>
+<body>
+    <div id="loading-screen">
+        <div class="spinner"></div>
+        <h2 id="loading-text" data-i18n="loading">正在构建三维城市网络...</h2>
+    </div>
+
+    <div id="ui-layer">
+        <div class="header">
+            <h1 id="app-title">ReTV-3DSC Urban</h1>
+            <p class="subtitle" id="app-subtitle" data-i18n="subtitle">Interactive 3D City Digital Twin</p>
+        </div>
+
+        <div class="top-actions">
+            <div id="realtime-clock" class="glass-control clock-style">--:--:--</div>
+            
+            <select id="basemap-select" class="glass-control select-box">
+                <option value="none" data-i18n="mapNone">地图底板: 无</option>
+                <option value="white" data-i18n="mapWhite">地图底板: 白色</option>
+                <option value="black" data-i18n="mapBlack">地图底板: 黑色</option>
+                <option value="satellite" data-i18n="mapSatellite">地图底板: 在线遥感</option>
+            </select>
+
+            <select id="city-select" class="glass-control select-box">
+                <option value="kunming">昆明 (Kunming)</option>
+                <option value="beijing">北京 (Beijing)</option>
+                <option value="shanghai">上海 (Shanghai)</option>
+                <option value="shenzhen">深圳 (Shenzhen)</option>
+                <option value="guangzhou">广州 (Guangzhou)</option>
+            </select>
+            <button id="btn-camera" class="glass-control btn-action" title="保存高清截图">📷 <span data-i18n="btnCamera">截图</span></button>
+            <button id="btn-download" class="glass-control btn-action">📥 <span data-i18n="btnDownload">下载 JSON</span></button>
+            <button id="btn-settings" class="glass-control btn-action btn-icon">⚙️ <span data-i18n="btnSettings">设置</span></button>
+            <button id="btn-about" class="glass-control btn-action btn-icon">ℹ️ <span data-i18n="btnAbout">关于</span></button>
+        </div>
+        
+        <div id="info-panel" class="glass-panel hidden">
+            <h3 id="bld-id">Building ID: ---</h3>
+            <div class="divider"></div>
+            <div class="data-row">
+                <span data-i18n="infoHeight">高度 (Height):</span>
+                <span id="bld-height" class="highlight">0 m</span>
+            </div>
+            <div class="data-row">
+                <span data-i18n="infoCoords">经纬度 (Lon, Lat):</span>
+                <span id="bld-coords">---</span>
+            </div>
+        </div>
+
+        <div id="bottom-left-panel">
+            <div id="compass" class="glass-panel" title="三维指北针">
+                <div class="compass-label">N</div>
+                <svg id="compass-pointer" viewBox="0 0 100 100" width="45" height="45">
+                    <polygon points="50,5 65,50 50,95 35,50" fill="rgba(0, 243, 255, 0.1)" stroke="var(--theme-color)" stroke-width="1.5"/>
+                    <polygon points="50,5 65,50 50,50" fill="var(--theme-color)"/>
+                </svg>
+            </div>
+            <div id="scale-container">
+                <div id="scale-bar"><div class="mid-tick"></div></div>
+                <div id="scale-label">100 m</div>
+            </div>
+        </div>
+        <div class="controls-hint glass-panel" id="controls-hint">
+            <p>🖱️ <b data-i18n="hintLeft">左键</b>：<span data-i18n="hintLeftDesc">旋转视角</span></p>
+            <p>🖱️ <b data-i18n="hintRight">右键</b>：<span data-i18n="hintRightDesc">平移地图</span></p>
+            <p>🖱️ <b data-i18n="hintScroll">滚轮</b>：<span data-i18n="hintScrollDesc">缩放城市</span></p>
+            <p>👆 <b data-i18n="hintHover">悬停</b>：<span data-i18n="hintHoverDesc">查看属性</span></p>
+        </div>
+    </div>
+
+    <div id="settings-modal" class="glass-panel hidden-modal">
+        <div class="modal-header">
+            <h3 style="margin: 0; color: var(--theme-color);" data-i18n="settingsTitle">⚙️ 场景控制台</h3>
+            <button id="btn-close-settings" class="close-btn">×</button>
+        </div>
+        <div class="divider"></div>
+        <div class="modal-body">
+            <div class="setting-item">
+                <span data-i18n="setLang">🌐 界面语言 (Language)</span>
+                <select id="lang-select" class="glass-control" style="padding: 2px 10px;">
+                    <option value="zh">中文</option>
+                    <option value="en">English</option>
+                </select>
+            </div>
+            <div class="setting-item">
+                <span data-i18n="setFullscreen">🖥️ 全屏模式</span>
+                <button id="btn-fullscreen" class="glass-control" style="padding: 2px 10px; min-width: 60px;">ON/OFF</button>
+            </div>
+            <div class="divider"></div>
+            <div class="setting-item">
+                <span data-i18n="setRipple">🌊 动态波纹特效</span>
+                <label class="switch">
+                    <input type="checkbox" id="toggle-ripple" checked>
+                    <span class="slider"></span>
+                </label>
+            </div>
+            <div class="setting-item">
+                <span data-i18n="setFog">🌫️ 远景科技雾</span>
+                <label class="switch">
+                    <input type="checkbox" id="toggle-fog" checked>
+                    <span class="slider"></span>
+                </label>
+            </div>
+            <div class="setting-item">
+                <span data-i18n="setGrid">🕸️ 底部网格投影</span>
+                <label class="switch">
+                    <input type="checkbox" id="toggle-grid" checked>
+                    <span class="slider"></span>
+                </label>
+            </div>
+            <div class="setting-item">
+                <span data-i18n="setAutoRotate">🚁 自动漫游模式</span>
+                <label class="switch">
+                    <input type="checkbox" id="toggle-autorotate">
+                    <span class="slider"></span>
+                </label>
+            </div>
+        </div>
+    </div>
+
+    <div id="about-modal" class="glass-panel hidden-modal">
+        <div class="modal-header">
+            <h3 style="margin: 0; color: var(--theme-color);" data-i18n="aboutTitle">ℹ️ 关于及版权信息</h3>
+            <button id="btn-close-about" class="close-btn">×</button>
+        </div>
+        <div class="divider"></div>
+        <div class="modal-body" style="font-size: 14px; color: #ccd6f6; line-height: 1.6;">
+            <p><strong>ReTV-3DSC Urban</strong></p>
+            <p data-i18n="aboutText1">本系统依托于《XXXXXX》论文研究成果开发 (注：请将此处替换为您的PDF论文真实标题)。</p>
+            <p data-i18n="aboutText2">版权所有 © 2024-2026 研究团队。保留所有权利。</p>
+            <p data-i18n="aboutText3">如需引用本系统及相关算法，请参考上述文献，未经授权不得用于商业用途。</p>
+            <div style="text-align: center; margin-top: 20px;">
+                <span style="color: var(--theme-color); font-weight: bold; font-size: 18px;">Research & Innovation</span>
+            </div>
+        </div>
+    </div>
+
+    <div id="canvas-container"></div>
+    <script src="script.js"></script>
+</body>
+</html>

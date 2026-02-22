@@ -1,0 +1,395 @@
+:root {
+    --theme-color: #00f3ff;
+    --bg-color: #0a0a16;
+    --panel-bg: rgba(15, 15, 30, 0.65);
+    --glass-border: rgba(0, 243, 255, 0.3);
+}
+
+body {
+    margin: 0;
+    overflow: hidden;
+    background-color: var(--bg-color);
+    font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    color: white;
+}
+
+#canvas-container {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    z-index: 1;
+}
+
+#ui-layer {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 10;
+    pointer-events: none;
+}
+
+/* 优化了毛玻璃的质感和边框发光 */
+.glass-panel {
+    background: linear-gradient(135deg, rgba(15, 15, 30, 0.8), rgba(5, 5, 15, 0.9));
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid var(--glass-border);
+    border-radius: 12px;
+    box-shadow: 0 8px 32px 0 rgba(0, 243, 255, 0.15), inset 0 0 0 1px rgba(0, 243, 255, 0.1);
+    pointer-events: auto;
+}
+
+/* 顶部标题 */
+.header {
+    position: absolute;
+    top: 30px;
+    left: 30px;
+    pointer-events: auto;
+}
+
+.header h1 {
+    margin: 0;
+    font-size: 28px;
+    font-weight: 800;
+    letter-spacing: 2px;
+    background: linear-gradient(90deg, #fff, var(--theme-color));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    text-shadow: 0 0 20px rgba(0, 243, 255, 0.4);
+}
+
+.subtitle {
+    margin: 5px 0 0 0;
+    font-size: 14px;
+    color: #8892b0;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+/* 右上角操作栏 */
+.top-actions {
+    position: absolute;
+    top: 30px;
+    right: 30px;
+    display: flex;
+    gap: 15px;
+    pointer-events: auto;
+}
+
+.glass-control {
+    background: rgba(10, 10, 22, 0.7);
+    backdrop-filter: blur(10px);
+    border: 1px solid var(--glass-border);
+    color: white;
+    border-radius: 8px;
+    padding: 10px 15px;
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    outline: none;
+    font-family: inherit;
+}
+
+.glass-control:hover {
+    background: rgba(0, 243, 255, 0.15);
+    box-shadow: 0 0 15px rgba(0, 243, 255, 0.4);
+    transform: translateY(-2px);
+}
+
+.select-box { cursor: pointer; }
+.select-box option { background: var(--bg-color); color: white; }
+
+/* 悬浮属性面板 */
+#info-panel {
+    position: absolute;
+    top: 119px;
+    left: 26px;
+    width: 280px;
+    padding: 20px;
+    transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+#info-panel.hidden {
+    opacity: 0;
+    transform: translateX(-20px);
+    pointer-events: none;
+}
+
+#info-panel h3 {
+    margin: 0 0 10px 0;
+    font-size: 18px;
+    color: var(--theme-color);
+}
+
+.divider {
+    height: 1px;
+    background: linear-gradient(90deg, rgba(0,243,255,0.5), transparent);
+    margin: 15px 0;
+}
+
+.data-row {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 10px;
+    font-size: 14px;
+    color: #ccd6f6;
+}
+
+.highlight {
+    font-weight: bold;
+    color: #fff;
+    text-shadow: 0 0 10px var(--theme-color);
+}
+
+/* 操作提示 */
+.controls-hint {
+    position: absolute;
+    bottom: 30px;
+    right: 30px;
+    padding: 15px 20px;
+    font-size: 13px;
+    color: #a8b2d1;
+}
+
+.controls-hint p { margin: 5px 0; }
+.controls-hint b { color: white; }
+
+/* 中央设置模态框 */
+#settings-modal {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%) scale(1);
+    width: 320px;
+    padding: 25px;
+    z-index: 100;
+    transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+#settings-modal.hidden-modal {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.8);
+    pointer-events: none;
+}
+
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.close-btn {
+    background: none;
+    border: none;
+    color: white;
+    font-size: 24px;
+    cursor: pointer;
+    line-height: 1;
+}
+
+.close-btn:hover { color: var(--theme-color); }
+
+.setting-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin: 18px 0;
+    font-size: 15px;
+    color: #ccd6f6;
+}
+
+/* 拨动开关样式 */
+.switch { position: relative; display: inline-block; width: 44px; height: 24px; }
+.switch input { opacity: 0; width: 0; height: 0; }
+.slider {
+    position: absolute; cursor: pointer;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background-color: #2a2a40;
+    transition: .4s; border-radius: 24px;
+    border: 1px solid rgba(255,255,255,0.1);
+}
+.slider:before {
+    position: absolute; content: "";
+    height: 18px; width: 18px;
+    left: 3px; bottom: 2px;
+    background-color: white;
+    transition: .4s; border-radius: 50%;
+}
+input:checked + .slider { background-color: var(--theme-color); box-shadow: 0 0 10px var(--theme-color); }
+input:checked + .slider:before { transform: translateX(19px); }
+
+/* 加载动画 */
+#loading-screen {
+    position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+    background: #0a0a16; z-index: 999;
+    display: flex; flex-direction: column; justify-content: center; align-items: center;
+    transition: opacity 0.8s ease;
+}
+.spinner {
+    width: 50px; height: 50px;
+    border: 3px solid rgba(0, 243, 255, 0.1);
+    border-top-color: var(--theme-color);
+    border-radius: 50%;
+    animation: spin 1s linear infinite; margin-bottom: 20px;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ==== 新增：底部左侧面板 (指北针与比例尺) ==== */
+#bottom-left-panel {
+    position: absolute;
+    bottom: 30px;
+    left: 30px;
+    display: flex;
+    align-items: flex-end;
+    gap: 30px;
+    pointer-events: auto;
+}
+
+/* 指北针样式 */
+#compass {
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    flex-direction: column;
+    position: relative;
+    padding: 0;
+    box-shadow: 0 0 20px rgba(0, 243, 255, 0.2), inset 0 0 15px rgba(0, 243, 255, 0.1);
+}
+#compass::before {
+    content: '';
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    border: 1px dashed rgba(0, 243, 255, 0.4);
+    animation: rotate-slow 20s linear infinite;
+}
+@keyframes rotate-slow {
+    to { transform: rotate(360deg); }
+}
+.compass-label {
+    position: absolute;
+    top: 6px;
+    font-size: 12px;
+    font-weight: 800;
+    color: var(--theme-color);
+    text-shadow: 0 0 8px var(--theme-color);
+    z-index: 2;
+}
+#compass-pointer {
+    transition: transform 0.1s ease-out;
+    z-index: 1;
+    margin-top: 5px;
+    filter: drop-shadow(0px 0px 4px var(--theme-color));
+}
+
+/* 比例尺样式 */
+#scale-container {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    margin-bottom: 5px;
+}
+#scale-bar {
+    height: 6px;
+    border: 1px solid var(--theme-color);
+    border-top: none;
+    position: relative;
+    transition: width 0.2s ease-out;
+    box-shadow: 0 2px 5px rgba(0, 243, 255, 0.3);
+}
+#scale-bar::before, #scale-bar::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    width: 1px;
+    height: 6px;
+    background: var(--theme-color);
+}
+#scale-bar::before { left: 0; }
+#scale-bar::after { right: 0; }
+#scale-bar .mid-tick {
+    position: absolute;
+    bottom: 0;
+    left: 50%;
+    width: 1px;
+    height: 4px;
+    background: var(--theme-color);
+}
+#scale-label {
+    font-size: 13px;
+    font-weight: bold;
+    color: #fff;
+    margin-top: 6px;
+    text-shadow: 0 0 6px var(--theme-color), 0 0 2px #000;
+    letter-spacing: 1px;
+}
+
+/* ---- 请将此段追加至您原有的 style.css 底部，原有的 CSS 全部保持不变！ ---- */
+#realtime-clock {
+    color: var(--theme-color);
+    text-shadow: 0 0 12px rgba(0, 243, 255, 0.8), 0 0 4px rgba(255, 255, 255, 0.5);
+    background: rgba(5, 5, 15, 0.85);
+}
+
+/* ---- 你的原有代码在此之上，以下为新增增强与手机适配 ---- */
+
+.clock-style {
+    cursor: default; 
+    font-family: monospace; 
+    font-weight: bold; 
+    font-size: 16px; 
+    min-width: 80px; 
+    text-align: center; 
+    letter-spacing: 1px;
+}
+
+#about-modal {
+    position: fixed; top: 50%; left: 50%;
+    transform: translate(-50%, -50%) scale(1);
+    width: 400px; padding: 25px; z-index: 105;
+    transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+#about-modal.hidden-modal {
+    opacity: 0; transform: translate(-50%, -50%) scale(0.8); pointer-events: none;
+}
+
+/* 响应式移动端布局 - 保证手机端顺畅看 */
+@media screen and (max-width: 768px) {
+    .header { top: 15px; left: 15px; }
+    .header h1 { font-size: 20px; }
+    
+    /* 顶部操作栏折叠并缩小 */
+    .top-actions {
+        top: 15px; right: 15px;
+        flex-wrap: wrap; 
+        justify-content: flex-end;
+        gap: 8px;
+        width: 65%;
+    }
+    .glass-control {
+        padding: 6px 10px;
+        font-size: 12px;
+    }
+    
+    #realtime-clock { display: none; } /* 手机端隐藏时钟节省空间 */
+    
+    /* 信息面板移到底部，防止遮挡模型 */
+    #info-panel {
+        top: auto; bottom: 100px; left: 15px;
+        width: calc(100vw - 70px);
+        padding: 15px;
+    }
+    
+    #bottom-left-panel { bottom: 15px; left: 15px; gap: 15px; }
+    .controls-hint { display: none; } /* 手机端触屏，隐藏鼠标提示 */
+    
+    #settings-modal, #about-modal { width: 85%; padding: 15px; }
+}
