@@ -426,12 +426,32 @@ async function buildCity(data) {
                     clonedMaterial.onBeforeCompile = defaultMaterial.onBeforeCompile;
                     
                     const mesh = new THREE.Mesh(geometry, clonedMaterial);
-                    
-                    // 【无损性能优化】：关闭矩阵自动更新。由于模型全静止，这能节省海量 CPU 开销，极大消除卡顿！
                     mesh.matrixAutoUpdate = false;
                     mesh.updateMatrix();
 
-                    mesh.userData = { id: bldId, height: height, baseColor: 0x28385e };
+                    // ====== 新增：计算建筑占地面积与体量 ======
+                    let baseArea = 0;
+                    try {
+                        // 获取轮廓顶点并计算面积 (Three.js 提供的工具函数)
+                        baseArea = Math.abs(THREE.ShapeUtils.area(shape.getPoints()));
+                        // 如果有挖洞 (例如中庭)，减去空洞的面积
+                        if (shape.holes && shape.holes.length > 0) {
+                            shape.holes.forEach(hole => {
+                                baseArea -= Math.abs(THREE.ShapeUtils.area(hole.getPoints()));
+                            });
+                        }
+                    } catch (e) {
+                        baseArea = 0; // 容错处理
+                    }
+                    let bldVolume = baseArea * height; // 体量 = 底面积 × 高度
+
+                    mesh.userData = {
+                        id: bldId,
+                        height: height,
+                        area: baseArea,
+                        volume: bldVolume,
+                        baseColor: 0x28385e
+                    };
                     cityGroup.add(mesh);
                 });
             }
@@ -528,7 +548,10 @@ const i18nDict = {
         aboutText2: "版权所有 © 2024-2026 研究团队。保留所有权利。",
         aboutText3: "如需引用本系统及相关算法，请参考上述文献，未经授权不得用于商业用途。",
         // ===== 新增图表翻译 =====
-        chartTitle: "📊 城市建筑高度统计",
+        chartTitle: "📊 城市建筑数据多维统计",
+        chartTitleHeight: "📈 高度统计",
+        chartTitleArea: "📉 面积统计",
+        chartTitleVolume: "🧊 体量统计",
         chartClose: "关闭 (Close)",
         chartNoData: "暂无建筑数据加载"
     },
@@ -546,7 +569,10 @@ const i18nDict = {
         aboutText2: "Copyright © 2024-2026 Research Team. All rights reserved.",
         aboutText3: "For citations, please refer to the literature. No unauthorized commercial use.",
         // ===== 新增图表翻译 =====
-        chartTitle: "📊 City Building Height Stats",
+        chartTitle: "📊 City Building Multi-dimensional Stats",
+        chartTitleHeight: "📈 Height Stats",
+        chartTitleArea: "📉 Area Stats",
+        chartTitleVolume: "🧊 Volume Stats",
         chartClose: "Close",
         chartNoData: "No building data loaded"
     }
@@ -760,16 +786,36 @@ function bindUIEvents() {
     if (!chartModal) {
         chartModal = document.createElement('div');
         chartModal.id = 'chart-modal';
-        chartModal.style.cssText = 'position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); background:rgba(20,30,48,0.95); padding:20px; border-radius:10px; border:1px solid #00f3ff; z-index:9999; color:#fff; min-width:320px; display:none; flex-direction:column; box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6); font-family: sans-serif; transition: opacity 0.3s;';
-        
+        // 【修改点】：增加宽度和响应式支持
+        chartModal.style.cssText = 'position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); background:rgba(20,30,48,0.95); padding:20px; border-radius:10px; border:1px solid #00f3ff; z-index:9999; color:#fff; width: 85vw; max-width: 900px; display:none; flex-direction:column; box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6); font-family: sans-serif; transition: opacity 0.3s;';
+
         chartModal.innerHTML = `
-            <h3 data-i18n="chartTitle" style="margin:0 0 15px 0; border-bottom:1px solid #445566; padding-bottom:10px; font-size: 16px; text-align: center;">📊 城市建筑高度统计</h3>
-            <div id="chart-render-area" style="height: 180px; display: flex; align-items: flex-end; justify-content: space-around; border-bottom: 1px solid #667788; border-left: 1px solid #667788; padding: 10px 5px 0 5px;">
+            <h3 data-i18n="chartTitle" style="margin:0 0 15px 0; border-bottom:1px solid #445566; padding-bottom:10px; font-size: 16px; text-align: center;">📊 城市建筑数据多维统计</h3>
+            
+            <div style="display: flex; flex-direction: row; justify-content: space-between; gap: 20px; flex-wrap: wrap;">
+                
+                <div style="flex: 1; min-width: 220px; display: flex; flex-direction: column;">
+                    <h4 data-i18n="chartTitleHeight" style="text-align:center; margin:5px 0 10px 0; font-size:14px; color:#00f3ff;">📈 高度统计</h4>
+                    <div id="chart-render-height" style="height: 160px; display: flex; align-items: flex-end; justify-content: space-around; border-bottom: 1px solid #667788; border-left: 1px solid #667788; padding: 10px 5px 0 5px;"></div>
+                    <div id="chart-labels-height" style="display: flex; justify-content: space-around; margin-top: 8px; font-size: 11px; color: #aabbcc;"></div>
+                </div>
+
+                <div style="flex: 1; min-width: 220px; display: flex; flex-direction: column;">
+                    <h4 data-i18n="chartTitleArea" style="text-align:center; margin:5px 0 10px 0; font-size:14px; color:#ffb800;">📉 面积统计</h4>
+                    <div id="chart-render-area" style="height: 160px; display: flex; align-items: flex-end; justify-content: space-around; border-bottom: 1px solid #667788; border-left: 1px solid #667788; padding: 10px 5px 0 5px;"></div>
+                    <div id="chart-labels-area" style="display: flex; justify-content: space-around; margin-top: 8px; font-size: 11px; color: #aabbcc;"></div>
+                </div>
+
+                <div style="flex: 1; min-width: 220px; display: flex; flex-direction: column;">
+                    <h4 data-i18n="chartTitleVolume" style="text-align:center; margin:5px 0 10px 0; font-size:14px; color:#00ff9d;">🧊 体量统计</h4>
+                    <div id="chart-render-volume" style="height: 160px; display: flex; align-items: flex-end; justify-content: space-around; border-bottom: 1px solid #667788; border-left: 1px solid #667788; padding: 10px 5px 0 5px;"></div>
+                    <div id="chart-labels-volume" style="display: flex; justify-content: space-around; margin-top: 8px; font-size: 11px; color: #aabbcc;"></div>
+                </div>
+
             </div>
-            <div id="chart-labels-area" style="display: flex; justify-content: space-around; margin-top: 8px; font-size: 12px; color: #aabbcc;">
-            </div>
-            <div style="margin-top:20px; text-align:center;">
-                <button id="btn-close-chart" data-i18n="chartClose" style="padding: 6px 20px; cursor: pointer; background: #28385e; color: white; border: 1px solid #00f3ff; border-radius: 4px; font-size: 14px;">关闭 (Close)</button>
+
+            <div style="margin-top:25px; text-align:center;">
+                <button id="btn-close-chart" data-i18n="chartClose" style="padding: 6px 25px; cursor: pointer; background: #28385e; color: white; border: 1px solid #00f3ff; border-radius: 4px; font-size: 14px;">关闭 (Close)</button>
             </div>
         `;
         document.body.appendChild(chartModal);
@@ -782,55 +828,75 @@ function bindUIEvents() {
     if (btnChart) {
         btnChart.addEventListener('click', () => {
             if (cityGroup && cityGroup.children.length > 0) {
-                // 动态分析高度区间分布
-                let counts = [0, 0, 0, 0, 0];
-                let labels = ['<20m', '20-50m', '50-100m', '100-200m', '>200m'];
-                
+                // 定义高度、面积、体量的区间和标签 (使用通用单位和k代表千，兼容中英文)
+                let hCounts = [0, 0, 0, 0, 0];
+                let hLabels = ['<20m', '20-50m', '50-100m', '100-200m', '>200m'];
+
+                let aCounts = [0, 0, 0, 0, 0];
+                let aLabels = ['<500m²', '500-1k', '1k-2k', '2k-5k', '>5km²'];
+
+                let vCounts = [0, 0, 0, 0, 0];
+                let vLabels = ['<10km³', '10-50k', '50-100k', '100-200k', '>200km³'];
+
+                // 一次遍历，同时统计三个指标
                 cityGroup.children.forEach(mesh => {
                     let h = mesh.userData.height || 0;
-                    if (h < 20) counts[0]++;
-                    else if (h < 50) counts[1]++;
-                    else if (h < 100) counts[2]++;
-                    else if (h < 200) counts[3]++;
-                    else counts[4]++;
+                    if (h < 20) hCounts[0]++; else if (h < 50) hCounts[1]++; else if (h < 100) hCounts[2]++; else if (h < 200) hCounts[3]++; else hCounts[4]++;
+
+                    let a = mesh.userData.area || 0;
+                    if (a < 500) aCounts[0]++; else if (a < 1000) aCounts[1]++; else if (a < 2000) aCounts[2]++; else if (a < 5000) aCounts[3]++; else aCounts[4]++;
+
+                    let v = mesh.userData.volume || 0;
+                    // 以 10k (1万) m³ 为基准区间
+                    if (v < 10000) vCounts[0]++; else if (v < 50000) vCounts[1]++; else if (v < 100000) vCounts[2]++; else if (v < 200000) vCounts[3]++; else vCounts[4]++;
                 });
 
-                let maxCount = Math.max(...counts, 1);
-                let renderArea = document.getElementById('chart-render-area');
-                let labelsArea = document.getElementById('chart-labels-area');
-                renderArea.innerHTML = '';
-                labelsArea.innerHTML = '';
+                // 提取通用的渲染函数
+                function renderBarChart(counts, labels, renderId, labelsId, themeColor) {
+                    let maxCount = Math.max(...counts, 1);
+                    let renderArea = document.getElementById(renderId);
+                    let labelsArea = document.getElementById(labelsId);
+                    renderArea.innerHTML = '';
+                    labelsArea.innerHTML = '';
 
-                counts.forEach((c, i) => {
-                    let heightPct = (c / maxCount) * 100;
-                    heightPct = Math.max(heightPct, 2); // 至少保留极小高度以便可见
+                    counts.forEach((c, i) => {
+                        let pct = (c / maxCount) * 100;
+                        pct = Math.max(pct, 2); // 至少保留2%高度避免看不到
 
-                    let col = document.createElement('div');
-                    // 【修复】：必须加上 height: 100%，否则内部的百分比高度柱子无法撑开
-                    col.style.cssText = 'flex: 1; height: 100%; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; margin: 0 4px;';
-                    
-                    let val = document.createElement('span');
-                    val.innerText = c;
-                    val.style.cssText = 'font-size: 12px; margin-bottom: 5px; color: #00f3ff; font-weight: bold;';
-                    
-                    let bar = document.createElement('div');
-                    bar.style.cssText = `width: 100%; max-width: 32px; height: ${heightPct}%; background: linear-gradient(to top, #005577, #00f3ff); border-radius: 3px 3px 0 0;`;
-                    
-                    col.appendChild(val);
-                    col.appendChild(bar);
-                    renderArea.appendChild(col);
+                        let col = document.createElement('div');
+                        col.style.cssText = 'flex: 1; height: 100%; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; margin: 0 3px;';
 
-                    let lbl = document.createElement('div');
-                    lbl.innerText = labels[i];
-                    lbl.style.cssText = 'flex: 1; text-align: center; white-space: nowrap; transform: scale(0.9);';
-                    labelsArea.appendChild(lbl);
-                });
+                        let val = document.createElement('span');
+                        val.innerText = c;
+                        val.style.cssText = `font-size: 11px; margin-bottom: 5px; color: ${themeColor}; font-weight: bold;`;
+
+                        let bar = document.createElement('div');
+                        // 使用对应的颜色，透明度调高更具质感
+                        bar.style.cssText = `width: 100%; height: ${pct}%; background: ${themeColor}; border-radius: 2px 2px 0 0; opacity: 0.85; transition: height 0.6s ease;`;
+
+                        col.appendChild(val);
+                        col.appendChild(bar);
+                        renderArea.appendChild(col);
+
+                        let lbl = document.createElement('span');
+                        lbl.innerText = labels[i];
+                        lbl.style.cssText = 'flex: 1; text-align: center; white-space: nowrap; transform: scale(0.85);';
+                        labelsArea.appendChild(lbl);
+                    });
+                }
+
+                // 渲染三个图表，赋予不同的主题色作区分
+                renderBarChart(hCounts, hLabels, 'chart-render-height', 'chart-labels-height', '#00f3ff'); // 蓝青色
+                renderBarChart(aCounts, aLabels, 'chart-render-area', 'chart-labels-area', '#ffb800');    // 暖黄色
+                renderBarChart(vCounts, vLabels, 'chart-render-volume', 'chart-labels-volume', '#00ff9d'); // 荧光绿
+
+                // 显示模态框
+                chartModal.style.display = 'flex';
+                // 强制应用当前的语言翻译以防切语言后第一次打开漏翻
+                switchLanguage(currentLang);
             } else {
-                // 【修复】：使用 i18nDict[currentLang].chartNoData 动态获取当前语言的提示文本
-                document.getElementById('chart-render-area').innerHTML = `<div style="color:#ff5555; align-self:center; width:100%; text-align:center;">${i18nDict[currentLang].chartNoData}</div>`;
-                document.getElementById('chart-labels-area').innerHTML = '';
+                alert(currentLang === 'zh' ? i18nDict.zh.chartNoData : i18nDict.en.chartNoData);
             }
-            chartModal.style.display = 'flex';
         });
     }
     // =========================================================================
@@ -991,31 +1057,76 @@ function onMouseMove(event) {
     }
 }
 
-// 【新增】：记录按下时的屏幕坐标
 function onPointerDown(event) {
+    // 记录按下的初始位置，用于判断是“点击”还是“拖拽滑动”
     pointerDownX = event.clientX;
     pointerDownY = event.clientY;
 }
 
-// 【新增】：抬起时计算移动距离，判断是点击还是拖拽
 function onPointerUp(event) {
-    // 计算手指/鼠标在 X 和 Y 方向的移动距离
-    const deltaX = Math.abs(event.clientX - pointerDownX);
-    const deltaY = Math.abs(event.clientY - pointerDownY);
-
-    // 如果移动距离超过 5 像素，说明用户在拖拽旋转/平移地图，直接 return，不触发建筑点击
-    if (deltaX > 5 || deltaY > 5) {
+    // 1. 防误触：如果 X 或 Y 移动距离超过 5 像素，说明用户在拖拽旋转地图，不是点击，直接返回
+    if (Math.abs(event.clientX - pointerDownX) > 5 || Math.abs(event.clientY - pointerDownY) > 5) {
         return;
     }
 
-    // 确定是纯粹的“点击”操作，计算标准设备坐标并触发射线
+    // 2. 计算标准化设备坐标 (NDC)
     mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
     mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
 
-    triggerRaycastClick();
+    // 3. 发射射线
+    raycaster.setFromCamera(mouse, camera);
+    const intersects = raycaster.intersectObjects(cityGroup.children);
+
+    if (intersects.length > 0) {
+        const object = intersects[0].object;
+
+        // 恢复之前高亮建筑的颜色
+        if (hoveredMesh && hoveredMesh !== object) {
+            hoveredMesh.material.color.setHex(hoveredMesh.userData.baseColor || 0x28385e);
+        }
+
+        // ==========================================
+        // 【修改点】：与 onMouseMove 样式保持完全一致
+        // ==========================================
+        hoveredMesh = object;
+        hoveredMesh.material.color.setHex(0x00f3ff); // 1. 颜色改为与悬停一致的亮蓝色
+
+        // 2. 补全 ID 前缀
+        if (bldIdText) bldIdText.innerText = `ID: ${hoveredMesh.userData.id}`;
+
+        // 3. 高度保留 2 位小数
+        if (bldHeightText) bldHeightText.innerText = (hoveredMesh.userData.height || 0).toFixed(2) + ' m';
+
+        // 4. 反算真实经纬度（统一保留 4 位小数并加上度数符号）
+        if (globalLocalOrigin && bldCoordsText) {
+            const pt = intersects[0].point;
+
+            const localMeshX = pt.x - globalCityOffset.x;
+            const localMeshZ = pt.z - globalCityOffset.z;
+
+            const webMercX = localMeshX + globalLocalOrigin[0];
+            const webMercY = globalLocalOrigin[1] - localMeshZ;
+
+            const [lon, lat] = inverseWebMercator(webMercX, webMercY);
+            bldCoordsText.innerText = `${lon.toFixed(4)}°, ${lat.toFixed(4)}°`;
+        } else if (bldCoordsText) {
+            bldCoordsText.innerText = `Calculating...`;
+        }
+
+        // 移除隐藏样式，让面板在手机上弹出来
+        infoPanel.classList.remove('hidden');
+
+    } else {
+        // 点击了没有建筑的空白地带 -> 恢复颜色并隐藏面板
+        if (hoveredMesh) {
+            hoveredMesh.material.color.setHex(hoveredMesh.userData.baseColor || 0x28385e);
+            hoveredMesh = null;
+        }
+        if (infoPanel) infoPanel.classList.add('hidden');
+    }
 }
 
-// 【新增】：执行点击后的射线检测与 UI 更新
+// 【修改】：执行点击后的射线检测与 UI 更新（完全对齐电脑端悬停样式）
 function triggerRaycastClick() {
     raycaster.setFromCamera(mouse, camera);
 
@@ -1033,13 +1144,14 @@ function triggerRaycastClick() {
                 hoveredMesh.material.color.setHex(hoveredMesh.userData.baseColor || 0x28385e);
             }
             hoveredMesh = object;
-            // 将当前选中建筑变为醒目的高亮色（如：橙黄 0xffaa00 或 亮蓝 0x00f3ff）
-            hoveredMesh.material.color.setHex(0xffaa00);
+            // 【修改点1】：颜色统一改为亮蓝色，和悬停保持一致
+            hoveredMesh.material.color.setHex(0x00f3ff);
         }
 
         // --- 2. 更新属性面板文字 ---
-        if (bldIdText) bldIdText.innerText = object.userData.id || "未知";
-        if (bldHeightText) bldHeightText.innerText = (object.userData.height || 0).toFixed(1) + ' m';
+        if (bldIdText) bldIdText.innerText = `ID: ${object.userData.id || "未知"}`; // 统一加上 "ID: " 前缀
+        // 【修改点2】：高度保留2位小数，和悬停保持一致
+        if (bldHeightText) bldHeightText.innerText = (object.userData.height || 0).toFixed(2) + ' m';
 
         // --- 3. 反算真实经纬度 ---
         if (globalLocalOrigin && bldCoordsText) {
@@ -1052,11 +1164,17 @@ function triggerRaycastClick() {
             const my = -localZ + globalLocalOrigin[1];
 
             const [lon, lat] = inverseWebMercator(mx, my);
-            bldCoordsText.innerText = `${lon.toFixed(6)}, ${lat.toFixed(6)}`;
+            // 【修改点3】：经纬度保留4位小数，并加上 ° 符号，和悬停保持一致
+            bldCoordsText.innerText = `${lon.toFixed(4)}°, ${lat.toFixed(4)}°`;
+        } else if (bldCoordsText) {
+            bldCoordsText.innerText = `Calculating...`;
         }
 
         // --- 4. 强制显示面板 ---
-        if (infoPanel) infoPanel.style.display = 'block';
+        if (infoPanel) {
+            infoPanel.style.display = '';
+            infoPanel.classList.remove('hidden');
+        }
 
     } else {
         // 如果点击到了空白处（底图/天空）
@@ -1065,7 +1183,9 @@ function triggerRaycastClick() {
             hoveredMesh = null;
         }
         // 隐藏面板
-        if (infoPanel) infoPanel.style.display = 'none';
+        if (infoPanel) {
+            infoPanel.classList.add('hidden');
+        }
     }
 }
 

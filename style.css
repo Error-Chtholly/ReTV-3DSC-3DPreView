@@ -1,3 +1,7 @@
+* {
+    box-sizing: border-box;
+}
+
 :root {
     --theme-color: #00f3ff;
     --bg-color: #0a0a16;
