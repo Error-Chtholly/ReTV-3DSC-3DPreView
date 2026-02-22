@@ -635,7 +635,7 @@ const i18nDict = {
         aboutTitle: "ℹ️ 关于及版权信息",
         aboutText1: "本系统依托于《Multi-temporal satellite parallax enables large-scale 3D urban reconstruction across global environments》论文研究成果开发 (注：请将此处替换为您的PDF论文真实标题)。",
         aboutText2: "版权所有 © 2024-2026 ReTV-3DSC研究团队，Error Chtholly。保留所有权利。",
-        aboutText3: "如需引用本系统及相关算法，请参考上述文献，未经授权不得用于商业用途。",
+        aboutText3: "如需引用本系统及相关算法，请参考上述文献，未经授权不得用于商业用途。目前暂为预览版。",
         // ===== 新增图表翻译 =====
         chartTitle: "📊 城市建筑数据多维统计",
         chartTitleHeight: "📈 高度统计",
@@ -657,7 +657,7 @@ const i18nDict = {
         aboutTitle: "ℹ️ About & Copyright",
         aboutText1: "This system is developed based on the paper <Multi-temporal satellite parallax enables large-scale 3D urban reconstruction across global environments> (Please replace with actual PDF title).",
         aboutText2: "Copyright © 2024-2026 ReTV-3DSC Research Team, Error Chtholly. All rights reserved.",
-        aboutText3: "For citations, please refer to the literature. No unauthorized commercial use.",
+        aboutText3: "For citations, please refer to the literature. No unauthorized commercial use. This is currently a preview version.",
         // ===== 新增图表翻译 =====
         chartTitle: "📊 City Building Multi-dimensional Stats",
         chartTitleHeight: "📈 Height Stats",
