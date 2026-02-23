@@ -273,6 +273,12 @@ function init() {
     scene.add(backLight);
 
     controls = new THREE.OrbitControls(camera, renderer.domElement);
+    controls.mouseButtons = {
+        LEFT: THREE.MOUSE.ROTATE, // 左键：按住旋转
+        MIDDLE: THREE.MOUSE.PAN,  // 中键（按住滚轮）：平移地图
+        RIGHT: null               // 右键：禁用（避免和浏览器右键菜单冲突）
+    };
+
     controls.enableDamping = true;
     controls.dampingFactor = 0.05;
     controls.maxPolarAngle = Math.PI / 2 - 0.05;
@@ -881,14 +887,43 @@ function bindUIEvents() {
     }
 
     let chartModal = document.getElementById('chart-modal');
-    if (!chartModal) {
-        chartModal = document.createElement('div');
-        chartModal.id = 'chart-modal';
-        // 【修改点】：增加宽度和响应式支持
-        chartModal.style.cssText = 'position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); background:rgba(20,30,48,0.95); padding:20px; border-radius:10px; border:1px solid #00f3ff; z-index:9999; color:#fff; width: 85vw; max-width: 900px; display:none; flex-direction:column; box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6); font-family: sans-serif; transition: opacity 0.3s;';
+        if (!chartModal) {
+            chartModal = document.createElement('div');
+            chartModal.id = 'chart-modal';
 
-        chartModal.innerHTML = `
-            <h3 data-i18n="chartTitle" style="margin:0 0 15px 0; border-bottom:1px solid #445566; padding-bottom:10px; font-size: 16px; text-align: center;">📊 城市建筑数据多维统计</h3>
+            // 【修改点1】：赋予弹窗与设置界面相同的 CSS 类名（如果有的话），继承基础动画
+            const settingsModal = document.getElementById('settings-modal');
+            if (settingsModal) {
+                chartModal.className = settingsModal.className.replace('hidden-modal', '');
+            }
+
+            // 【修改点2】：注入核心的“赛博朋克毛玻璃”样式，统一边框与背景质感
+            chartModal.style.cssText = `
+                position: fixed; 
+                top: 50%; 
+                left: 50%; 
+                transform: translate(-50%, -50%); 
+                width: 85vw; 
+                max-width: 900px; 
+                display: none; 
+                flex-direction: column; 
+                z-index: 9999; 
+                color: #fff; 
+                font-family: sans-serif; 
+                transition: all 0.3s ease;
+                
+                /* ==== 核心修改：毛玻璃发光 UI 风格 ==== */
+                background: rgba(10, 15, 30, 0.65) !important; /* 半透明深蓝底色 */
+                backdrop-filter: blur(12px) !important; /* 背景模糊(毛玻璃) */
+                -webkit-backdrop-filter: blur(12px) !important; /* 兼容苹果端 */
+                border: 1px solid rgba(0, 243, 255, 0.4) !important; /* 青色半透明边框 */
+                box-shadow: 0 0 20px rgba(0, 243, 255, 0.15) !important; /* 青色外发光 */
+                border-radius: 8px !important;
+                padding: 25px !important;
+            `;
+
+            chartModal.innerHTML = `
+                <h3 data-i18n="chartTitle" style="margin:0 0 20px 0; border-bottom:1px solid rgba(0,243,255,0.3); padding-bottom:12px; font-size: 18px; text-align: center; color: #00f3ff; text-shadow: 0 0 8px rgba(0,243,255,0.5);">📊 城市建筑数据多维统计</h3>
             
             <div style="display: flex; flex-direction: row; justify-content: space-between; gap: 20px; flex-wrap: wrap;">
                 
@@ -913,7 +948,7 @@ function bindUIEvents() {
             </div>
 
             <div style="margin-top:25px; text-align:center;">
-                <button id="btn-close-chart" data-i18n="chartClose" style="padding: 6px 25px; cursor: pointer; background: #28385e; color: white; border: 1px solid #00f3ff; border-radius: 4px; font-size: 14px;">关闭 (Close)</button>
+                <button id="btn-close-chart" data-i18n="chartClose" style="padding: 8px 30px; cursor: pointer; background: rgba(0, 243, 255, 0.1); color: #00f3ff; border: 1px solid rgba(0, 243, 255, 0.5); border-radius: 4px; font-size: 14px; box-shadow: 0 0 10px rgba(0,243,255,0.1); transition: all 0.3s;" onmouseover="this.style.background='rgba(0,243,255,0.2)'" onmouseout="this.style.background='rgba(0,243,255,0.1)'">关闭 (Close)</button>
             </div>
         `;
         document.body.appendChild(chartModal);
