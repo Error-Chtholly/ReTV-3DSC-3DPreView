@@ -665,7 +665,7 @@ const i18nDict = {
         aboutText2: "Copyright © 2024-2026 ReTV-3DSC Research Team, Error Chtholly. All rights reserved.",
         aboutText3: "For citations, please refer to the literature. No unauthorized commercial use. This is currently a preview version.",
         // ===== 新增图表翻译 =====
-        chartTitle: "📊 City Building Multi-dimensional Stats",
+        chartTitle: "📊 Urban Building Multi-dimensional Stats",
         chartTitleHeight: "📈 Height Stats",
         chartTitleArea: "📉 Area Stats",
         chartTitleVolume: "🧊 Volume Stats",
